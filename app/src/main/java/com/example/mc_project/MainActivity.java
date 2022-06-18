@@ -38,7 +38,9 @@ public class MainActivity extends AppCompatActivity {
                     // Handle the returned Uri
                     Log.d("Info", "Received Uri: "+uri.getPath());
                     Toast.makeText(getApplicationContext(), "Selected File for Upload"+uri.getPath(), Toast.LENGTH_LONG).show();
-                    // TODO: Split File into fragments and Get the list of target device IPs to upload
+                    // TODO:
+                    //  1. Split File into fragments and Get the list of target device IPs to upload
+                    //  2. Upload and store the fragment names in local META File
                     MainActivity.UploadTask up1 = new MainActivity.UploadTask(uri);
                     Toast.makeText(getApplicationContext(),"Starting to Upload",Toast.LENGTH_LONG).show();
                     up1.execute();
@@ -67,8 +69,9 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
 //                mGetContent.launch("image/*");
                 // TODO:
-                //  1. Get the list of device IPs to download file fragments from
-                //  2. Stitch the fragments together and store in local device
+                //  1. Get the list of device IPs to download file fragments from (via broadcast of fragment names from Meta FILE)
+                //  2. Download the fragments
+                //  3. Stitch the fragments together and store in local device
             }
         });
 
@@ -84,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+
+    // UPLOAD Thread
     public class UploadTask extends AsyncTask<String, String, String> {
 
         Uri recDirectory;
