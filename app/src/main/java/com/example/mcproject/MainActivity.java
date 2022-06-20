@@ -1,4 +1,5 @@
-package com.example.mc_project;
+package com.example.mcproject;
+
 
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -101,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(getApplicationContext(), "Starting to execute Background Upload Task", Toast.LENGTH_LONG).show();
         }
 
-//        @RequiresApi(api = Build.VERSION_CODES.O)
+        //        @RequiresApi(api = Build.VERSION_CODES.O)
         @Override
         protected String doInBackground(String... strings) {
             try {
@@ -122,87 +123,87 @@ public class MainActivity extends AppCompatActivity {
 //                    Log.d("Files", "FileName:" + videos[i].getName());
 
 //                    File videoFile = videos[i];
-                    File videoFile = new File(recDirectory.getPath());
-                    String url = uploadUrl + videoFile.getName();
-                    String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
-                    String CRLF = "\r\n"; // Line separator required by multipart/form-data.
+                File videoFile = new File(recDirectory.getPath());
+                String url = uploadUrl + videoFile.getName();
+                String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
+                String CRLF = "\r\n"; // Line separator required by multipart/form-data.
 
-                    URLConnection connection;
+                URLConnection connection;
 
-                    Log.d("info", "UploadFileName: " + videoFile);
+                Log.d("info", "UploadFileName: " + videoFile);
 
-                    connection = new URL(url).openConnection();
-                    connection.setDoOutput(true);
-                    connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-                    Log.i("info", "Upload connection");
-                    connection.connect();
+                connection = new URL(url).openConnection();
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+                Log.i("info", "Upload connection");
+                connection.connect();
 
-                    try (
-                            OutputStream output = connection.getOutputStream();
-                            PrintWriter writer = new PrintWriter(new OutputStreamWriter(output, charset), true);
-                    ) {
-                        Log.i("info", "getOutputStream");
-                        Base64OutputStream encodedOutput = new Base64OutputStream(output, 0);
-                        // Send normal accept.
-                        writer.append("--" + boundary).append(CRLF);
-                        writer.append("Content-Disposition: form-data; name=\"accept\"").append(CRLF);
-                        writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
-                        writer.append(CRLF).append(accept).append(CRLF).flush();
+                try (
+                        OutputStream output = connection.getOutputStream();
+                        PrintWriter writer = new PrintWriter(new OutputStreamWriter(output, charset), true);
+                ) {
+                    Log.i("info", "getOutputStream");
+                    Base64OutputStream encodedOutput = new Base64OutputStream(output, 0);
+                    // Send normal accept.
+                    writer.append("--" + boundary).append(CRLF);
+                    writer.append("Content-Disposition: form-data; name=\"accept\"").append(CRLF);
+                    writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
+                    writer.append(CRLF).append(accept).append(CRLF).flush();
 
-                        writer.append("Content-Disposition: form-data; name=\"filename\"").append(CRLF);
-                        writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
-                        writer.append(CRLF).append(videoFile.getName()).append(CRLF).flush();
+                    writer.append("Content-Disposition: form-data; name=\"filename\"").append(CRLF);
+                    writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
+                    writer.append(CRLF).append(videoFile.getName()).append(CRLF).flush();
 
-                        // Send normal accept.
-                        writer.append("--" + boundary).append(CRLF);
-                        writer.append("Content-Disposition: form-data; name=\"id\"").append(CRLF);
-                        writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
-                        writer.append(CRLF).append(ASUid).append(CRLF).flush();
+                    // Send normal accept.
+                    writer.append("--" + boundary).append(CRLF);
+                    writer.append("Content-Disposition: form-data; name=\"id\"").append(CRLF);
+                    writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
+                    writer.append(CRLF).append(ASUid).append(CRLF).flush();
 
-                        // Send normal accept.
-                        writer.append("--" + boundary).append(CRLF);
-                        writer.append("Content-Disposition: form-data; name=\"group_id\"").append(CRLF);
-                        writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
-                        writer.append(CRLF).append(group_id).append(CRLF).flush();
+                    // Send normal accept.
+                    writer.append("--" + boundary).append(CRLF);
+                    writer.append("Content-Disposition: form-data; name=\"group_id\"").append(CRLF);
+                    writer.append("Content-Type: text/plain; charset=" + charset).append(CRLF);
+                    writer.append(CRLF).append(group_id).append(CRLF).flush();
 
 
-                        // Send video file.
-                        writer.append("--" + boundary).append(CRLF);
-                        writer.append("Content-Disposition: form-data; name=\"file\"").append(CRLF);
-                        writer.append("Content-Type: video/mp4; charset=" + charset).append(CRLF); // Text file itself must be saved in this charset!
-                        writer.append(CRLF).flush();
-                        Log.i("info", "FileName: " + videoFile.getName());
-                        FileInputStream vf = new FileInputStream(videoFile);
-                        try {
-                            byte[] buffer = new byte[1024];
-                            int bytesRead = 0;
-                            while ((bytesRead = vf.read(buffer, 0, buffer.length)) >= 0) {
-                                Log.i("info", "Writing to Output Stream");
-                                encodedOutput.write(buffer, 0, bytesRead);
+                    // Send video file.
+                    writer.append("--" + boundary).append(CRLF);
+                    writer.append("Content-Disposition: form-data; name=\"file\"").append(CRLF);
+                    writer.append("Content-Type: video/mp4; charset=" + charset).append(CRLF); // Text file itself must be saved in this charset!
+                    writer.append(CRLF).flush();
+                    Log.i("info", "FileName: " + videoFile.getName());
+                    FileInputStream vf = new FileInputStream(videoFile);
+                    try {
+                        byte[] buffer = new byte[1024];
+                        int bytesRead = 0;
+                        while ((bytesRead = vf.read(buffer, 0, buffer.length)) >= 0) {
+                            Log.i("info", "Writing to Output Stream");
+                            encodedOutput.write(buffer, 0, bytesRead);
 
-                            }
-                        } catch (Exception exception) {
-                            //Toast.makeText(getApplicationContext(),"output exception in catch....."+ exception + "", Toast.LENGTH_LONG).show();
-                            Log.d("Error", String.valueOf(exception));
-                            publishProgress(String.valueOf(exception));
-                            // output.close();
                         }
-
-                        output.flush(); // Important before continuing with writer!
-                        writer.append(CRLF).flush(); // CRLF is important! It indicates end of boundary.
-
-                        // End of multipart/form-data.
-                        writer.append("--" + boundary + "--").append(CRLF).flush();
-                    } catch (UnsupportedEncodingException e) {
-                        e.printStackTrace();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                    } catch (Exception exception) {
+                        //Toast.makeText(getApplicationContext(),"output exception in catch....."+ exception + "", Toast.LENGTH_LONG).show();
+                        Log.d("Error", String.valueOf(exception));
+                        publishProgress(String.valueOf(exception));
+                        // output.close();
                     }
 
-                    // Request is lazily fired whenever you need to obtain information about response.
-                    int responseCode = ((HttpURLConnection) connection).getResponseCode();
-                    System.out.println(responseCode); // Should be 200
-                } catch (MalformedURLException malformedURLException) {
+                    output.flush(); // Important before continuing with writer!
+                    writer.append(CRLF).flush(); // CRLF is important! It indicates end of boundary.
+
+                    // End of multipart/form-data.
+                    writer.append("--" + boundary + "--").append(CRLF).flush();
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                // Request is lazily fired whenever you need to obtain information about response.
+                int responseCode = ((HttpURLConnection) connection).getResponseCode();
+                System.out.println(responseCode); // Should be 200
+            } catch (MalformedURLException malformedURLException) {
                 malformedURLException.printStackTrace();
             } catch (IOException ioException) {
                 ioException.printStackTrace();
