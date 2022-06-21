@@ -8,12 +8,22 @@ import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
 import android.util.Log;
 
+import com.example.mcproject.discovery.MyDiscoveryListener;
+import com.example.mcproject.discovery.MyRegistrationListener;
+
 import java.net.InetAddress;
 
 public class DiscoveryTestActivity extends AppCompatActivity {
     private static final String TAG = "PPDiscovery";
 
+    private static final String serviceName = "NsdChat";
+    private static final String SERVICE_TYPE = "_nsdchat._tcp.";
+
     NsdManager nsdManager;
+    NsdManager.RegistrationListener registrationListener;
+    NsdManager.DiscoveryListener discoveryListener;
+
+    private volatile boolean isDiscoveryRunning = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,126 +31,58 @@ public class DiscoveryTestActivity extends AppCompatActivity {
         setContentView(R.layout.activity_discovery_test);
 
 
-        NsdServiceInfo serviceInfo = new NsdServiceInfo();
-        serviceInfo.setServiceName("NsdChat");
-        serviceInfo.setServiceType("_nsdchat._tcp");
-        serviceInfo.setPort(8081);
-
-
         nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
-        NsdManager.RegistrationListener registrationListener = initializeRegistrationListener();
-        nsdManager.registerService(
-                serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener);
 
+        startDiscovery();
+        //START SERVICE BUTTON
+        findViewById(R.id.button).setOnClickListener((view)->{
+            stopDiscovery(); //stop discovery on this device before starting service on this device
+
+            NsdServiceInfo serviceInfo = new NsdServiceInfo();
+            serviceInfo.setServiceName(serviceName);
+            serviceInfo.setServiceType(SERVICE_TYPE);
+            serviceInfo.setPort(8081);
+            if(registrationListener==null) {
+                registrationListener = new MyRegistrationListener();
+            }
+            nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener);
+            Log.i(TAG,"Service Start Triggered");
+        });
+
+        //START DISCOVERY BUTTON
+        findViewById(R.id.button2).setOnClickListener((view)->{
+            startDiscovery();
+        });
     }
 
-
-    public NsdManager.RegistrationListener initializeRegistrationListener() {
-        return new NsdManager.RegistrationListener() {
-
-            @Override
-            public void onServiceRegistered(NsdServiceInfo NsdServiceInfo) {
-                // Save the service name. Android may have changed it in order to
-                // resolve a conflict, so update the name you initially requested
-                // with the name Android actually used.
-                String serviceName = NsdServiceInfo.getServiceName();
-                Log.i(TAG,"serviceName: "+serviceName);
-            }
-
-            @Override
-            public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                // Registration failed! Put debugging code here to determine why.
-                Log.e(TAG,"Registration failed! "+errorCode);
-            }
-
-            @Override
-            public void onServiceUnregistered(NsdServiceInfo arg0) {
-                // Service has been unregistered. This only happens when you call
-                // NsdManager.unregisterService() and pass in this listener.
-            }
-
-            @Override
-            public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                // Unregistration failed. Put debugging code here to determine why.
-            }
-        };
+    @Override
+    protected void onDestroy() {
+        tearDown();
+//        connection.tearDown();
+        super.onDestroy();
+    }
+    // NsdHelper's tearDown method
+    public void tearDown() {
+        nsdManager.unregisterService(registrationListener);
+        stopDiscovery();
     }
 
-    public void initializeDiscoveryListener() {
-
-        // Instantiate a new DiscoveryListener
-        return new NsdManager.DiscoveryListener() {
-
-            // Called as soon as service discovery begins.
-            @Override
-            public void onDiscoveryStarted(String regType) {
-                Log.d(TAG, "Service discovery started");
-            }
-
-            @Override
-            public void onServiceFound(NsdServiceInfo service) {
-                // A service was found! Do something with it.
-                Log.d(TAG, "Service discovery success" + service);
-                if (!service.getServiceType().equals(SERVICE_TYPE)) {
-                    // Service type is the string containing the protocol and
-                    // transport layer for this service.
-                    Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
-                } else if (service.getServiceName().equals(serviceName)) {
-                    // The name of the service tells the user what they'd be
-                    // connecting to. It could be "Bob's Chat App".
-                    Log.d(TAG, "Same machine: " + serviceName);
-                } else if (service.getServiceName().contains("NsdChat")){
-                    nsdManager.resolveService(service, resolveListener);
-                }
-            }
-
-            @Override
-            public void onServiceLost(NsdServiceInfo service) {
-                // When the network service is no longer available.
-                // Internal bookkeeping code goes here.
-                Log.e(TAG, "service lost: " + service);
-            }
-
-            @Override
-            public void onDiscoveryStopped(String serviceType) {
-                Log.i(TAG, "Discovery stopped: " + serviceType);
-            }
-
-            @Override
-            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                nsdManager.stopServiceDiscovery(this);
-            }
-
-            @Override
-            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-                nsdManager.stopServiceDiscovery(this);
-            }
-        };
+    private void startDiscovery(){
+        if(isDiscoveryRunning){
+            Log.i(TAG,"Discovery is already running, not starting again");
+            return;
+        }
+        if(discoveryListener==null){
+            discoveryListener = new MyDiscoveryListener(nsdManager);
+        }
+        nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
+        isDiscoveryRunning = true;
+        Log.i(TAG,"Service Discovery Triggered");
     }
 
-    public void initializeResolveListener() {
-        return new NsdManager.ResolveListener() {
-
-            @Override
-            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                // Called when the resolve fails. Use the error code to debug.
-                Log.e(TAG, "Resolve failed: " + errorCode);
-            }
-
-            @Override
-            public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
-
-                if (serviceInfo.getServiceName().equals(serviceName)) {
-                    Log.d(TAG, "Same IP.");
-                    return;
-                }
-                mService = serviceInfo;
-                int port = mService.getPort();
-                InetAddress host = mService.getHost();
-            }
-        };
+    private void stopDiscovery(){
+        nsdManager.stopServiceDiscovery(discoveryListener);
+        isDiscoveryRunning = false;
     }
+
 }
