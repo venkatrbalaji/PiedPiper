@@ -83,6 +83,7 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
                 InetAddress host = mService.getHost();
 
                 Log.i(TAG, "Resolved Service details are: host: " + host+" port: "+port);
+                //TODO here start a socket connection to the host
             }
         };
     }
