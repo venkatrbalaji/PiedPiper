@@ -1,10 +1,10 @@
-package com.example.mcproject;
+package com.example.piedpiper;
 
+import androidx.appcompat.app.AppCompatActivity;
 
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
 import android.net.Uri;
