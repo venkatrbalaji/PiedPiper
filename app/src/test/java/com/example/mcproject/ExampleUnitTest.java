@@ -1,4 +1,4 @@
-package com.example.piedpiper;
+package com.example.mcproject;
 
 import org.junit.Test;
 
