@@ -101,7 +101,7 @@ public class HttpdActivity extends AppCompatActivity {
         public Response serve(IHTTPSession session) {
             Log.i(TAG, "Session: " + session.getQueryParameterString()); // Gives url parameter as a string
             String api = session.getUri().toLowerCase(); // Denotes the REST Endpoint like'/upload', '/download', '/', etc.
-
+            // /uplaod endpoint
             if (api.contains("upload")) {
                 // Code to handle Upload from Client goes here.
                 //  This Server Code will download the file.
