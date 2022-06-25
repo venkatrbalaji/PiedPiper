@@ -11,7 +11,11 @@ import android.util.Log;
 import com.example.mcproject.discovery.MyDiscoveryListener;
 import com.example.mcproject.discovery.MyRegistrationListener;
 
+import java.io.PrintWriter;
 import java.net.InetAddress;
+import java.net.Socket;
+import java.util.ArrayList;
+
 
 public class DiscoveryTestActivity extends AppCompatActivity {
     private static final String TAG = "PPDiscovery";
@@ -24,6 +28,8 @@ public class DiscoveryTestActivity extends AppCompatActivity {
     NsdManager.DiscoveryListener discoveryListener;
 
     private volatile boolean isDiscoveryRunning = false;
+
+//    ArrayList<Client>
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,6 +89,17 @@ public class DiscoveryTestActivity extends AppCompatActivity {
     private void stopDiscovery(){
         nsdManager.stopServiceDiscovery(discoveryListener);
         isDiscoveryRunning = false;
+    }
+
+    public class Clients {
+        Socket socket;
+        String name;
+        PrintWriter writer;
+        public Clients(Socket socket, String name, PrintWriter writer){
+            this.socket = socket;
+            this.name = name;
+            this.writer = writer;
+        }
     }
 
 }
