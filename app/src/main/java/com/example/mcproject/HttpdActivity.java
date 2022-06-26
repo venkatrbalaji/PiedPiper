@@ -185,6 +185,41 @@ public class HttpdActivity extends AppCompatActivity {
             // 3. Hit the '/upload' endpoints of the clients
             // 4. Write the fragment name and client IP to the Manifest file
 
+            JSONObject manifestObject = manifestFileReader();
+            try {
+                if (manifestObject != null) {
+                    JSONArray nwDeviceDetails = manifestObject.getJSONArray("nwDeviceDetails");
+
+                    JSONObject uploadDetails = manifestObject.getJSONObject("uploadDetails");
+
+                    Log.i(TAG, "nwDeviceDetails: " + nwDeviceDetails);
+                    Log.i(TAG, "uploadDetails: " + uploadDetails);
+
+                    List<String> fragmentsToUpload = Arrays.asList("file3_1.txt", "file3_2.txt");
+                    int fragCount = fragmentsToUpload.size();
+                    int deviceCount = nwDeviceDetails.length();
+
+
+                    for (int i=0; i<fragCount; i++){
+                        JSONObject fragObj = nwDeviceDetails.getJSONObject(i%deviceCount); // Round Robin client picking. Can be based on proximity.
+                        String fragName = fragmentsToUpload.get(i);
+                        String clientIP = (String) fragObj.get("ip");
+                        String clientPort = (String) fragObj.get("port");
+                        String uploadURL = "http//"+clientIP+":"+clientPort+"/upload";
+
+                        Log.i(TAG, "Upload URL:" + uploadURL);
+
+                        //TODO: Uncomment below line when ready to deploy
+
+                        // uploadFiles(fragName, clientIP, clientPort);
+
+                    }
+
+                }
+            }
+            catch (JSONException e) {
+                e.printStackTrace();
+            }
 
         });
 
