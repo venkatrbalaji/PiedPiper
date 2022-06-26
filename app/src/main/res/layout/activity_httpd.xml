@@ -7,12 +7,22 @@
     tools:context=".HttpdActivity">
 
     <Button
-        android:id="@+id/httpdButton"
+        android:id="@+id/upldButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="142dp"
-        android:layout_marginTop="273dp"
-        android:text="Button"
+        android:layout_marginStart="156dp"
+        android:layout_marginTop="140dp"
+        android:text="Upload"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/dwnldButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="144dp"
+        android:layout_marginTop="264dp"
+        android:text="Download"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
