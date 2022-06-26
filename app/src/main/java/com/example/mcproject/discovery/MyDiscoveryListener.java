@@ -77,7 +77,6 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
             @Override
             public void onServiceResolved(NsdServiceInfo serviceInfo) {
                 Log.i(TAG, "Resolve Succeeded. " + serviceInfo);
-
                 NsdServiceInfo mService = serviceInfo;
                 int port = mService.getPort();
                 InetAddress host = mService.getHost();
