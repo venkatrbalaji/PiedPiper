@@ -193,6 +193,7 @@ public class HttpdActivity extends AppCompatActivity {
                         status_message);
             }
             else if (api.contains("upload")) {
+                // upload endpoint
                 // Code to handle Upload from Client goes here.
                 //  This Server Code will download the file.
                 InputStream input = session.getInputStream();

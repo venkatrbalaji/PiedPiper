@@ -77,11 +77,10 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
             @Override
             public void onServiceResolved(NsdServiceInfo serviceInfo) {
                 Log.i(TAG, "Resolve Succeeded. " + serviceInfo);
-
                 NsdServiceInfo mService = serviceInfo;
                 int port = mService.getPort();
                 InetAddress host = mService.getHost();
-
+//                ClientThread.start(host,port);
                 Log.i(TAG, "Resolved Service details are: host: " + host+" port: "+port);
                 //TODO here start a socket connection to the host
             }

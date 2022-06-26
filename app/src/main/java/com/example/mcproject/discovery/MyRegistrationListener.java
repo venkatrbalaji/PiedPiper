@@ -6,6 +6,7 @@ import android.util.Log;
 
 public class MyRegistrationListener implements NsdManager.RegistrationListener {
 
+
     private static final String TAG = "PPRegistration";
 
     @Override

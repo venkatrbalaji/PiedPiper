@@ -16,6 +16,7 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 
+
 public class DiscoveryTestActivity extends AppCompatActivity {
     private static final String TAG = "PPDiscovery";
 
@@ -89,7 +90,6 @@ public class DiscoveryTestActivity extends AppCompatActivity {
         nsdManager.stopServiceDiscovery(discoveryListener);
         isDiscoveryRunning = false;
     }
-
 
     public class Clients {
         Socket socket;
