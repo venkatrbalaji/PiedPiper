@@ -28,6 +28,9 @@ public class DiscoveryTestActivity extends AppCompatActivity {
     NsdManager.DiscoveryListener discoveryListener;
 
     private volatile boolean isDiscoveryRunning = false;
+    String manifestFileName= null;
+    String selfIp = null;
+
 
 //    ArrayList<Client>
 
@@ -79,7 +82,7 @@ public class DiscoveryTestActivity extends AppCompatActivity {
             return;
         }
         if(discoveryListener==null){
-            discoveryListener = new MyDiscoveryListener(nsdManager);
+            discoveryListener = new MyDiscoveryListener(nsdManager, manifestFileName, selfIp);
         }
         nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
         isDiscoveryRunning = true;

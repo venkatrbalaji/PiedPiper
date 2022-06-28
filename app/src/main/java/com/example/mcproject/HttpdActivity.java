@@ -5,13 +5,21 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
 import android.net.Uri;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.widget.Toast;
 
 //import org.json.simple.JSONObject;
+
+import com.example.mcproject.discovery.MyDiscoveryListener;
+import com.example.mcproject.discovery.MyRegistrationListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -37,6 +45,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -45,9 +54,25 @@ public class HttpdActivity extends AppCompatActivity {
     private WebServer server;
     String status_message = "Do nothing";
     String uploadDirectoryName = "fragmentUploads";
+    String downloadDirectoryName = "fragmentDownloads";
     File manifestFile = null;
-    String selfIP = "192.168.0.12";
+    String manifestFileName = "PiedPiper_Manifest.txt";
+    File SDCardRoot = Environment.getExternalStorageDirectory();
+    File ppSysDir = new File(SDCardRoot, "/PiedPiper/");
+    String selfIP = null;
     String selfPort = "8080";
+
+    private static final String TAG = "HttpdActivity";
+//    private static final String serviceName = "NsdChat_";
+//    private static final String SERVICE_TYPE = "_nsdchat._tcp.";
+    protected String serviceName = "NsdChat_";
+    private static final String SERVICE_TYPE = "_nsdchat._tcp.";
+    NsdManager nsdManager;
+    NsdManager.RegistrationListener registrationListener;
+    NsdManager.DiscoveryListener discoveryListener;
+    Semaphore manifestWriteSemaphore = new Semaphore(1);
+
+    private volatile boolean isDiscoveryRunning = false;
 
     ActivityResultLauncher<String> mGetContent = registerForActivityResult(new ActivityResultContracts.GetContent(),
             new ActivityResultCallback<Uri>() {
@@ -59,16 +84,8 @@ public class HttpdActivity extends AppCompatActivity {
                     // TODO:
                     //  1. Split File into fragments and Get the list of target device IPs to upload
                     //  2. Upload and store the fragment names in local META File
-//                    MainActivity.UploadTask up1 = new HttpdActivity().UploadTask(uri);
                     Toast.makeText(getApplicationContext(),"Starting to Upload",Toast.LENGTH_LONG).show();
-//                    up1.execute();
-                    server = new WebServer();
-                    try {
-                        server.start();
-                    } catch(IOException ioe) {
-                        Log.w("Httpd", "The server could not start.");
-                    }
-                    Log.w("Httpd", "Web server initialized.");
+
                 }
             });
 
@@ -78,6 +95,11 @@ public class HttpdActivity extends AppCompatActivity {
         setContentView(R.layout.activity_httpd);
         String TAG = "HttpdActivity";
 
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        selfIP = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
+        Log.i(TAG, "Current Device IP: "+ selfIP);
+        serviceName = serviceName + selfIP;
+
         server = new WebServer();
         try {
             server.start();
@@ -86,101 +108,30 @@ public class HttpdActivity extends AppCompatActivity {
         }
         Log.w("Httpd", "Web server initialized.");
 
-        // TODO: Move the Manifest file Create/Update to NSD Service Registration/Discovery
-        // Create PP SystemFiles Directory
-        File SDCardRoot = Environment.getExternalStorageDirectory();
-        File ppSysDir = new File(SDCardRoot, "/PiedPiper/"); //create directory to keep your downloaded file
-        if (!ppSysDir.exists()) {
-            ppSysDir.mkdir();
+
+        // NSD
+        nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
+//        startDiscovery();
+        stopDiscovery(); //stop discovery on this device before starting service on this device
+
+        NsdServiceInfo serviceInfo = new NsdServiceInfo();
+        serviceInfo.setServiceName(serviceName);
+        serviceInfo.setServiceType(SERVICE_TYPE);
+        serviceInfo.setPort(Integer.parseInt(selfPort));
+        if(registrationListener==null) {
+            registrationListener = new MyRegistrationListener();
         }
+        nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener);
+        Log.i(TAG,"Service Start Triggered");
+        startDiscovery();
 
-        // Sample Manifest File Structure:
-        // {
-        //  "nwDeviceDetails": [{"ip":"192.168.0.12", "port":"8000"}, {} ... {}],
-        //  "uploadDetails": {
-        //      "file1": [{fragName:frag1_name, ip:192.168.0.12, port:8080}, ...{}],
-        //      "file2": [{},...{}]
-        //  }
-        // }
-
-        // Create Manifest File
-        manifestFile = new File(ppSysDir, "PiedPiper_Manifest.json");
-        if (!manifestFile.exists()){
-            Log.i(TAG, "File " + manifestFile.getName() + " does not exist. Creating a new one");
-            JSONObject manifestObject = new JSONObject();
-            try {
-
-                JSONArray nwDeviceDetails = new JSONArray(); // Value for key "nwDeviceDetails"
-                JSONObject uploadDetails = new JSONObject(); // Value for key "uploadDetails"
-
-                // Add values to the above keys.
-                JSONObject device1 = new JSONObject();
-                device1.put("ip", "192.168.0.16");
-                device1.put("port", "8000");
-                JSONObject device2 = new JSONObject();
-                device2.put("ip", "192.168.0.12");
-                device2.put("port", "8080");
-                nwDeviceDetails.put(device1);
-                nwDeviceDetails.put(device2);
-
-                JSONArray file1Frags = new JSONArray();
-                JSONObject file1Frag1 = new JSONObject();
-                file1Frag1.put("fragName", "File1_1.txt");
-                file1Frag1.put("ip", "192.168.0.16");
-                file1Frag1.put("port", "8000");
-                JSONObject file1Frag2 = new JSONObject();
-                file1Frag2.put("fragName", "File1_1.txt");
-                file1Frag2.put("ip", "192.168.0.16");
-                file1Frag2.put("port", "8000");
-                file1Frags.put(file1Frag1);
-                file1Frags.put(file1Frag2);
-                uploadDetails.put("file1", file1Frags);
-
-                manifestObject.put("nwDeviceDetails", nwDeviceDetails);
-                manifestObject.put("uploadDetails", uploadDetails);
-            }
-            catch (Exception e){
-                Log.i(TAG, "Found Exception in Manifest File Creation: " + e);
-            }
-            //Write JSON file
-            try (FileWriter file = new FileWriter(manifestFile)) {
-                //We can write any JSONArray or JSONObject instance to the file
-//                byte[] encodedManifest = manifestObject.toString().getBytes("utf-8");
-//                file.write(encodeBase64(encodedManifest));
-                file.write(String.valueOf(manifestObject));
-                file.write("\r\n");
-                file.flush();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-        else{
-            JSONObject manifestObject = manifestFileReader();
-            try {
-                if (manifestObject != null) {
-                    JSONArray nwDeviceDetails = manifestObject.getJSONArray("nwDeviceDetails");
-
-                    JSONObject uploadDetails = manifestObject.getJSONObject("uploadDetails");
-
-                    Log.i(TAG, "nwDeviceDetails: " + nwDeviceDetails);
-                    Log.i(TAG, "uploadDetails: " + uploadDetails);
-                }
-            }
-            catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-        }
 
         // Button Actions
         findViewById(R.id.upldButton).setOnClickListener((view)->{
 
 //            mGetContent.launch("image/*");
             //TODO: Upload Action
-            // 1. Read possible client IPs from Manifest file (Static for now)
+            // 1. Read possible client IPs from Manifest file (Static for now) - Done
             // 2. Split the File into fragments (To be included by SG)
             // 3. Hit the '/upload' endpoints of the clients
             // 4. Write the fragment name and client IP to the Manifest file
@@ -195,10 +146,11 @@ public class HttpdActivity extends AppCompatActivity {
                     Log.i(TAG, "nwDeviceDetails: " + nwDeviceDetails);
                     Log.i(TAG, "uploadDetails: " + uploadDetails);
 
+                    // TODO: Integrate Fragmentation here
+                    String fileToUpload = "file1";
                     List<String> fragmentsToUpload = Arrays.asList("file3_1.txt", "file3_2.txt");
                     int fragCount = fragmentsToUpload.size();
                     int deviceCount = nwDeviceDetails.length();
-
 
                     for (int i=0; i<fragCount; i++){
                         JSONObject fragObj = nwDeviceDetails.getJSONObject(i%deviceCount); // Round Robin client picking. Can be based on proximity.
@@ -209,18 +161,43 @@ public class HttpdActivity extends AppCompatActivity {
 
                         Log.i(TAG, "Upload URL:" + uploadURL);
 
-                        //TODO: Uncomment below line when ready to deploy
+                        //TODO: Uncomment below line when ready to deploy.
+                        // Additional checks for successful upload and retry on Failure can be included
 
                         // uploadFiles(fragName, clientIP, clientPort);
 
-                    }
+                        // TODO: Write the details to Manifest File
+                        // Add values to the read-in keys.
+                        try {
+                            JSONArray currFileFrags = null;
+                            if (uploadDetails.has(fileToUpload)){
+                                currFileFrags = (JSONArray) uploadDetails.get(fileToUpload);
+                            }
+                            else {
+                                currFileFrags = new JSONArray();
+                            }
+                            JSONObject file1Frag1 = new JSONObject();
+                            file1Frag1.put("fragName", fragName);
+                            file1Frag1.put("ip", clientIP);
+                            file1Frag1.put("port", clientPort);
+                            currFileFrags.put(file1Frag1);
+                            // TODO: Account for appending to manifest uploadDetails per file
+                            uploadDetails.put(fileToUpload, currFileFrags);
 
+                            manifestObject.put("nwDeviceDetails", nwDeviceDetails);
+                            manifestObject.put("uploadDetails", uploadDetails);
+
+                            manifestWriter(manifestObject);
+                        }
+                        catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
             }
             catch (JSONException e) {
                 e.printStackTrace();
             }
-
         });
 
         findViewById(R.id.dwnldButton).setOnClickListener((view)->{
@@ -246,10 +223,6 @@ public class HttpdActivity extends AppCompatActivity {
 
                     JSONArray downloadFileFrags = (JSONArray) uploadDetails.get(downloadFileName);
 
-//                    downloadFileFrags.forEach(item -> {
-//                        JSONObject obj = (JSONObject) item;
-//                    });
-
                     int fragCount = downloadFileFrags.length();
 
                     for (int i=0; i<fragCount; i++){
@@ -274,36 +247,26 @@ public class HttpdActivity extends AppCompatActivity {
 
     }
 
-    public String encodeBase64(byte [] encodeMe){
-        byte[] encodedBytes = Base64.getEncoder().encode(encodeMe);
-        return new String(encodedBytes) ;
-    }
-
-    public byte[]decodeBase64(String encodedData){
-        byte[] decodedBytes = Base64.getDecoder().decode(encodedData.getBytes());
-        return decodedBytes ;
-    }
+//    public String encodeBase64(byte [] encodeMe){
+//        byte[] encodedBytes = Base64.getEncoder().encode(encodeMe);
+//        return new String(encodedBytes) ;
+//    }
+//
+//    public byte[]decodeBase64(String encodedData){
+//        byte[] decodedBytes = Base64.getDecoder().decode(encodedData.getBytes());
+//        return decodedBytes ;
+//    }
 
     public JSONObject manifestFileReader(){
         //TODO: Read from Manifest File
 //            JSONParser jsonParser = new JSONParser();
 
         JSONObject manifestObject = null;
-        String TAG = "manifestFileReader";
+        manifestFile = new File(ppSysDir, manifestFileName);
         Log.i(TAG, "File " + manifestFile.getName() + " exists. Reading it.");
 
         try (FileReader reader = new FileReader(manifestFile))
         {
-            //Read JSON file
-//                Object obj = jsonParser.parse(reader);
-//                JSONArray employeeList = (JSONArray) obj;
-//                System.out.println(employeeList);
-//                //Iterate over employee array
-//                employeeList.forEach( emp -> parseEmployeeObject( (JSONObject) emp ) );
-//                String sample = "{\"nwDeviceDetails\":[{\"ip\":\"192.168.0.16\",\"port\":\"8000\"},{\"ip\":\"192.168.0.12\",\"port\":\"8080\"}],\"uploadDetails\":{\"file1\":\"[[File1_1.txt, 192.168.0.16, 8000], [File1_2.txt, 192.168.0.16, 8000]]\"}}";
-//                byte[] contentBytes = decodeBase64(String.valueOf(reader.read()));
-//                String content = null;
-
             StringBuilder manifestContent = new StringBuilder("");
 
             char[] buffer = new char[1024];
@@ -313,7 +276,6 @@ public class HttpdActivity extends AppCompatActivity {
             }
 
             Log.i(TAG, "Read Content: " + String.valueOf(manifestContent));
-
             manifestObject = new JSONObject(String.valueOf(manifestContent));
 
         } catch (IOException | JSONException e) {
@@ -322,13 +284,31 @@ public class HttpdActivity extends AppCompatActivity {
         return manifestObject;
     }
 
+
+    public void manifestWriter(JSONObject manifestObject){
+        //Write JSON file
+        (new Thread() {
+            public void run() {
+                Log.i(TAG, "Waiting to write Manifest File");
+                try (FileWriter file = new FileWriter(manifestFile)) {
+                    manifestWriteSemaphore.acquire();
+                    Log.i(TAG, "Writing to Manifest File");
+                    file.write(String.valueOf(manifestObject));
+                    file.write("\r\n");
+                    file.flush();
+
+                } catch (IOException | InterruptedException e) {
+                    e.printStackTrace();
+                }
+                manifestWriteSemaphore.release();
+            }}).start();
+    }
+
+
     public void uploadFiles(String fragmentName, String client_ip, String port){
 
         String TAG = "uploadFile";
-//        String fragmentName = urlParameters.get("filename");
-//        String client_ip = urlParameters.get("ip"); // To be picked from manifest file
-//        String port = urlParameters.get("port"); // To be picked from manifest file
-        String url = "http://" + client_ip + ":" + port + "/upload";
+        String url = "http://" + client_ip + ":" + port + "/upload?filename=" + fragmentName;
         String charset = "UTF-8";
         File fragmentFile = new File(Environment.getExternalStorageDirectory()+"/" + uploadDirectoryName + "/"+fragmentName);
         String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
@@ -392,11 +372,39 @@ public class HttpdActivity extends AppCompatActivity {
     @Override
     public void onDestroy()
     {
+        tearDown();
         super.onDestroy();
         if (server != null)
             server.stop();
     }
 
+    // NsdHelper's tearDown method
+    public void tearDown() {
+        nsdManager.unregisterService(registrationListener);
+        stopDiscovery();
+    }
+
+    private void startDiscovery(){
+        if(isDiscoveryRunning){
+            Log.i(TAG,"Discovery is already running, not starting again");
+            return;
+        }
+        if(discoveryListener==null){
+            discoveryListener = new MyDiscoveryListener(nsdManager, manifestFileName, selfIP);
+        }
+        nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
+        isDiscoveryRunning = true;
+        Log.i(TAG,"Service Discovery Triggered");
+    }
+
+    private void stopDiscovery(){
+        if (isDiscoveryRunning) {
+            nsdManager.stopServiceDiscovery(discoveryListener);
+            isDiscoveryRunning = false;
+        }
+    }
+
+    // WEB Server
     private class WebServer extends NanoHTTPD {
 
         String TAG = "WebServer";
@@ -423,15 +431,18 @@ public class HttpdActivity extends AppCompatActivity {
                 // Code to handle Upload from Client goes here.
                 //  This Server Code will download the file.
                 InputStream input = session.getInputStream();
+                Map<String, String> urlParameters = session.getParms();
+                String fragmentName = urlParameters.get("filename");
+                Log.i(TAG, "Downloading File: " + fragmentName);
                 File SDCardRoot = Environment.getExternalStorageDirectory(); // location where you want to store
-                File directory = new File(SDCardRoot, "/" + uploadDirectoryName + "/"); //create directory to keep your downloaded file
+                File directory = new File(SDCardRoot, "/" + downloadDirectoryName + "/"); //create directory to keep your downloaded file
                 if (!directory.exists()) {
                     directory.mkdir();
                 }
                 //input = url.openStream();
                 OutputStream output = null;
                 try {
-                    output = new FileOutputStream(new File(directory, "UploadedFile.txt"));
+                    output = new FileOutputStream(new File(directory, fragmentName));
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
                 }
