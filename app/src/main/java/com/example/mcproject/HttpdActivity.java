@@ -14,12 +14,15 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.text.format.Formatter;
 import android.util.Log;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 //import org.json.simple.JSONObject;
 
 import com.example.mcproject.discovery.MyDiscoveryListener;
 import com.example.mcproject.discovery.MyRegistrationListener;
+import com.example.mcproject.filemanagement.MyFileManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -43,6 +46,7 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -53,12 +57,13 @@ public class HttpdActivity extends AppCompatActivity {
 
     private WebServer server;
     String status_message = "Do nothing";
+    String appDirectoryName = "PiedPiper";
     String uploadDirectoryName = "fragmentUploads";
     String downloadDirectoryName = "fragmentDownloads";
-    File manifestFile = null;
     String manifestFileName = "PiedPiper_Manifest.txt";
     File SDCardRoot = Environment.getExternalStorageDirectory();
-    File ppSysDir = new File(SDCardRoot, "/PiedPiper/");
+    File ppSysDir = new File(SDCardRoot, "/" + appDirectoryName + "/");
+    File manifestFile = null;
     String selfIP = null;
     String selfPort = "8080";
 
@@ -71,6 +76,8 @@ public class HttpdActivity extends AppCompatActivity {
     NsdManager.RegistrationListener registrationListener;
     NsdManager.DiscoveryListener discoveryListener;
     Semaphore manifestWriteSemaphore = new Semaphore(1);
+    MyFileManager fileShardManager;
+    Spinner spinnerList;
 
     private volatile boolean isDiscoveryRunning = false;
 
@@ -79,12 +86,91 @@ public class HttpdActivity extends AppCompatActivity {
                 @Override
                 public void onActivityResult(Uri uri) {
                     // Handle the returned Uri
-                    Log.d("Info", "Received Uri: "+uri.getPath());
-                    Toast.makeText(getApplicationContext(), "Selected File for Upload"+uri.getPath(), Toast.LENGTH_LONG).show();
+                    String filePath = uri.getPath().split(":")[1];
+                    String[] filePathParts = filePath.split("/");
+                    String fileName = filePathParts[filePathParts.length-1];
+                    Log.d("Info", "Received Uri: "+filePath);
+                    Toast.makeText(getApplicationContext(), "Selected File for Upload: "+filePath, Toast.LENGTH_LONG).show();
                     // TODO:
                     //  1. Split File into fragments and Get the list of target device IPs to upload
                     //  2. Upload and store the fragment names in local META File
                     Toast.makeText(getApplicationContext(),"Starting to Upload",Toast.LENGTH_LONG).show();
+                    JSONObject manifestObject = manifestFileReader();
+                    try {
+                        if (manifestObject != null) {
+                            JSONArray nwDeviceDetails = manifestObject.getJSONArray("nwDeviceDetails");
+
+                            JSONObject uploadDetails = manifestObject.getJSONObject("uploadDetails");
+
+                            Log.i(TAG, "nwDeviceDetails: " + nwDeviceDetails);
+                            Log.i(TAG, "uploadDetails: " + uploadDetails);
+
+                            // TODO: Integrate Sharding here
+                            String fileToUpload = Environment.getExternalStorageDirectory() + "/" + filePath;
+//                            InputStream inputFileStream = new FileInputStream(fileToUpload);
+                            List<String> fragmentsToUpload = fileShardManager.processFileUpload(fileToUpload); // Sharding
+                            int fragCount = fragmentsToUpload.size();
+                            int deviceCount = nwDeviceDetails.length();
+
+                            for (int i=0; i<fragCount; i++){
+                                JSONObject fragObj = nwDeviceDetails.getJSONObject(i%deviceCount); // Round Robin client picking. Can be based on proximity.
+                                String fragName = fragmentsToUpload.get(i);
+                                String clientIP = (String) fragObj.get("ip");
+                                String clientPort = (String) fragObj.get("port");
+                                String uploadURL = "http//"+clientIP+":"+clientPort+"/upload";
+
+                                Log.i(TAG, "Upload URL:" + uploadURL);
+
+                                File fragmentFile = new File(ppSysDir, uploadDirectoryName + "/"+fragName);
+
+                                //TODO: Uncomment below line when ready to deploy.
+                                // 1. Additional checks for successful upload and retry on Failure can be included
+
+                                // uploadFiles(fragmentFile, clientIP, clientPort);
+
+                                // TODO: Write the details to Manifest File
+                                // Add values to the read-in keys.
+                                try {
+                                    JSONArray currFileFrags = null;
+                                    if (uploadDetails.has(fileName)){
+                                        currFileFrags = (JSONArray) uploadDetails.get(fileName);
+                                    }
+                                    else {
+                                        currFileFrags = new JSONArray();
+                                    }
+                                    JSONObject file1Frag1 = new JSONObject();
+                                    file1Frag1.put("fragName", fragName);
+                                    file1Frag1.put("ip", clientIP);
+                                    file1Frag1.put("port", clientPort);
+                                    currFileFrags.put(file1Frag1);
+                                    // TODO: Account for appending uploadDetails per file to manifest
+                                    uploadDetails.put(fileName, currFileFrags);
+
+                                    manifestObject.put("nwDeviceDetails", nwDeviceDetails);
+                                    manifestObject.put("uploadDetails", uploadDetails);
+
+                                    manifestWriter(manifestObject);
+                                }
+                                catch (JSONException e){
+                                    e.printStackTrace();
+                                }
+
+                                // TODO: Delete the shards after upload
+
+                                Boolean deleteSucces = fragmentFile.delete();
+                                if (!deleteSucces){
+                                    Log.i(TAG, "Deleting Shard " + fragmentFile.getPath() + " post-upload Failed.");
+                                }
+                                else{
+                                    Log.i(TAG, "Shard " + fragmentFile.getName() + " Deleted successfully post-upload.");
+                                }
+
+                            }
+                        }
+                    }
+                    catch (JSONException e) {
+                        e.printStackTrace();
+                    }
 
                 }
             });
@@ -99,6 +185,8 @@ public class HttpdActivity extends AppCompatActivity {
         selfIP = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
         Log.i(TAG, "Current Device IP: "+ selfIP);
         serviceName = serviceName + selfIP;
+
+        fileShardManager = new MyFileManager(ppSysDir, uploadDirectoryName);
 
         server = new WebServer();
         try {
@@ -125,79 +213,26 @@ public class HttpdActivity extends AppCompatActivity {
         Log.i(TAG,"Service Start Triggered");
         startDiscovery();
 
+        spinnerList = findViewById(R.id.spinner);
+
+        populateSpinner(spinnerList);
+
 
         // Button Actions
         findViewById(R.id.upldButton).setOnClickListener((view)->{
 
-//            mGetContent.launch("image/*");
             //TODO: Upload Action
             // 1. Read possible client IPs from Manifest file (Static for now) - Done
-            // 2. Split the File into fragments (To be included by SG)
+            // 2. Split the File into fragments (To be included by SG) - Done
             // 3. Hit the '/upload' endpoints of the clients
-            // 4. Write the fragment name and client IP to the Manifest file
+            // 4. Write the fragment name and client IP to the Manifest file - Done
+            mGetContent.launch("image/*");
 
-            JSONObject manifestObject = manifestFileReader();
-            try {
-                if (manifestObject != null) {
-                    JSONArray nwDeviceDetails = manifestObject.getJSONArray("nwDeviceDetails");
 
-                    JSONObject uploadDetails = manifestObject.getJSONObject("uploadDetails");
+        });
 
-                    Log.i(TAG, "nwDeviceDetails: " + nwDeviceDetails);
-                    Log.i(TAG, "uploadDetails: " + uploadDetails);
-
-                    // TODO: Integrate Fragmentation here
-                    String fileToUpload = "file1";
-                    List<String> fragmentsToUpload = Arrays.asList("file3_1.txt", "file3_2.txt");
-                    int fragCount = fragmentsToUpload.size();
-                    int deviceCount = nwDeviceDetails.length();
-
-                    for (int i=0; i<fragCount; i++){
-                        JSONObject fragObj = nwDeviceDetails.getJSONObject(i%deviceCount); // Round Robin client picking. Can be based on proximity.
-                        String fragName = fragmentsToUpload.get(i);
-                        String clientIP = (String) fragObj.get("ip");
-                        String clientPort = (String) fragObj.get("port");
-                        String uploadURL = "http//"+clientIP+":"+clientPort+"/upload";
-
-                        Log.i(TAG, "Upload URL:" + uploadURL);
-
-                        //TODO: Uncomment below line when ready to deploy.
-                        // Additional checks for successful upload and retry on Failure can be included
-
-                        // uploadFiles(fragName, clientIP, clientPort);
-
-                        // TODO: Write the details to Manifest File
-                        // Add values to the read-in keys.
-                        try {
-                            JSONArray currFileFrags = null;
-                            if (uploadDetails.has(fileToUpload)){
-                                currFileFrags = (JSONArray) uploadDetails.get(fileToUpload);
-                            }
-                            else {
-                                currFileFrags = new JSONArray();
-                            }
-                            JSONObject file1Frag1 = new JSONObject();
-                            file1Frag1.put("fragName", fragName);
-                            file1Frag1.put("ip", clientIP);
-                            file1Frag1.put("port", clientPort);
-                            currFileFrags.put(file1Frag1);
-                            // TODO: Account for appending to manifest uploadDetails per file
-                            uploadDetails.put(fileToUpload, currFileFrags);
-
-                            manifestObject.put("nwDeviceDetails", nwDeviceDetails);
-                            manifestObject.put("uploadDetails", uploadDetails);
-
-                            manifestWriter(manifestObject);
-                        }
-                        catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-            catch (JSONException e) {
-                e.printStackTrace();
-            }
+        findViewById(R.id.refreshButton).setOnClickListener((view)->{
+            populateSpinner(spinnerList);
         });
 
         findViewById(R.id.dwnldButton).setOnClickListener((view)->{
@@ -209,7 +244,7 @@ public class HttpdActivity extends AppCompatActivity {
             // 3. The last step would have automatically hit the '/upload' endpoint of current device, which will download the fragments
             // 4. Stitch the fragments into single file (To be included by SG)
 
-            String downloadFileName = "file1";
+            String downloadFileName = spinnerList.getSelectedItem().toString();
 
             JSONObject manifestObject = manifestFileReader();
             try {
@@ -305,12 +340,12 @@ public class HttpdActivity extends AppCompatActivity {
     }
 
 
-    public void uploadFiles(String fragmentName, String client_ip, String port){
+    public void uploadFiles(File fragmentFile, String client_ip, String port){
 
         String TAG = "uploadFile";
-        String url = "http://" + client_ip + ":" + port + "/upload?filename=" + fragmentName;
+        String url = "http://" + client_ip + ":" + port + "/upload?filename=" + fragmentFile.getName();
         String charset = "UTF-8";
-        File fragmentFile = new File(Environment.getExternalStorageDirectory()+"/" + uploadDirectoryName + "/"+fragmentName);
+//        File fragmentFile = new File(Environment.getExternalStorageDirectory()+"/" + uploadDirectoryName + "/"+fragmentName);
         String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
         String CRLF = "\r\n"; // Line separator required by multipart/form-data.
 
@@ -404,6 +439,31 @@ public class HttpdActivity extends AppCompatActivity {
         }
     }
 
+    public void populateSpinner(Spinner spinnerList){
+
+        List<String> uploadedFiles = new ArrayList<>();
+        Log.i(TAG, "Populating download file list.");
+        JSONObject manifestObject = manifestFileReader();
+        try {
+            if (manifestObject != null) {
+
+                JSONObject uploadDetails = manifestObject.getJSONObject("uploadDetails");
+
+//                JSONArray downloadFileFrags = (JSONArray) uploadDetails.get(downloadFileName);
+                Iterator keys = uploadDetails.keys();
+
+                while (keys.hasNext()){
+                    uploadedFiles.add((String) keys.next());
+                }
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, uploadedFiles);
+            spinnerList.setAdapter(adapter);
+        }
+        catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
     // WEB Server
     private class WebServer extends NanoHTTPD {
 
@@ -435,7 +495,7 @@ public class HttpdActivity extends AppCompatActivity {
                 String fragmentName = urlParameters.get("filename");
                 Log.i(TAG, "Downloading File: " + fragmentName);
                 File SDCardRoot = Environment.getExternalStorageDirectory(); // location where you want to store
-                File directory = new File(SDCardRoot, "/" + downloadDirectoryName + "/"); //create directory to keep your downloaded file
+                File directory = new File(ppSysDir + downloadDirectoryName + "/"); //create directory to keep your downloaded file
                 if (!directory.exists()) {
                     directory.mkdir();
                 }
@@ -483,10 +543,17 @@ public class HttpdActivity extends AppCompatActivity {
                 String client_ip = urlParameters.get("ip"); // To be picked from manifest file
                 String port = urlParameters.get("port"); // To be picked from manifest file
 
-                uploadFiles(fragmentName, client_ip, port);
+                File fragmentFile = new File(ppSysDir, downloadDirectoryName + "/"+fragmentName);
+                if (fragmentFile.exists()) {
+                    uploadFiles(fragmentFile, client_ip, port);
 
-                return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT,
-                        "File Sent Successfully");
+                    return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT,
+                            "File Sent Successfully");
+                }
+                else{
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT,
+                            "File " + fragmentName + " is not available at Peer: " + client_ip);
+                }
             }
             else{
                 // TODO: Landing Page '/' action goes here

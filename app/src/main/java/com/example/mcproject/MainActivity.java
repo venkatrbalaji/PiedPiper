@@ -93,12 +93,13 @@ public class MainActivity extends AppCompatActivity {
                     String filename = mCursor.getString(indexedname);
                     mCursor.close();
                     Log.d("PP"," fileName: "+filename);
-                    InputStream inputStream = getContentResolver().openInputStream(uri);
-                    List<String> fileShards = MyFileManager.processFileUpload(filename,inputStream);
+//                    InputStream inputStream = getContentResolver().openInputStream(uri);
+//                    List<String> fileShards = MyFileManager.processFileUpload(filename,inputStream);
+                    List<String> fileShards = MyFileManager.processFileUpload(filename);
                     //  TODO 2. Upload file shards
                     Toast.makeText(getApplicationContext(),"Starting to Upload",Toast.LENGTH_LONG).show();
 
-                } catch (FileNotFoundException e) {
+                } catch (Exception e) {
                     Log.e("ERROR","Exception: ",e);
                     Toast.makeText(getApplicationContext(),"ERROR: "+e.getMessage(),Toast.LENGTH_LONG).show();
                 }
