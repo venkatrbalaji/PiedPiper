@@ -23,9 +23,12 @@ public class MyFileManager {
     //all file parts will be stored in dir
     private static final String TAG = "PPFileManager";
 //    private static final String dirName = "/my_files/";
-    static public File directory = new File(Environment.getExternalStorageDirectory(), "/pp_shard_files/");
+    static public File directory;
 //    static String dirName = "C:\\Users\\saura\\Desktop\\TestFol\\";
 
+    public MyFileManager(File ppSysDir, String uploadDirectoryName){
+        directory = new File(ppSysDir, "/" + uploadDirectoryName + "/");
+    }
     public static void processFileDownload(String filename,OutputStream os){
         checkDir();
         try {
@@ -35,23 +38,36 @@ public class MyFileManager {
         }
     }
 
-    public static List<String> processFileUpload(String filename, InputStream inputStream){
+//    public static List<String> processFileUpload(String filename, InputStream inputStream){
+//        checkDir();
+//        try {
+//            Log.i(TAG,"directory: "+directory.toString()+directory.exists());
+//            File file = new File(filename);
+//            Log.i(TAG,"directory: "+file);
+//            OutputStream outputStream = new FileOutputStream(file);
+//
+//            byte[] buffer = new byte[1024];
+//            int bytesRead;
+//
+//            while ((bytesRead = inputStream.read(buffer)) != -1) {
+//                outputStream.write(buffer, 0, bytesRead);
+//            }
+//
+//            inputStream.close();
+//            outputStream.close();
+//            return shardBlob(filename,2);
+//        }
+//        catch (Exception e) {
+//            Log.e(TAG,"Exception: ",e);
+//        }
+//        return null;
+//    }
+
+
+    public static List<String> processFileUpload(String filename){
         checkDir();
         try {
-            Log.i(TAG,"directory: "+directory.toString()+directory.exists());
-            File file = new File(directory, filename);
-            Log.i(TAG,"directory: "+file);
-            OutputStream outputStream = new FileOutputStream(file);
-
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-
-            inputStream.close();
-            outputStream.close();
+            Log.i(TAG,"directory: "+directory.toString()+ ",  Exists: " + directory.exists());
             return shardBlob(filename,2);
         }
         catch (Exception e) {
@@ -59,6 +75,7 @@ public class MyFileManager {
         }
         return null;
     }
+
 
     public static String reconstructShards(List<String> shardBlobIdList,String newName) throws IOException {
         checkDir();
@@ -86,10 +103,12 @@ public class MyFileManager {
 
     private static List<String> shardBlob(String inFileName,int shardNumbers) throws IOException {
         checkDir();
-        File inputFIle = new File(directory,inFileName);
+        File inputFIle = new File(inFileName);
         FileInputStream inputStream = new FileInputStream(inputFIle);
 
-        String shardPrefix = "shard_"+inputFIle.getName()+"_"+String.valueOf(shardNumbers) ;
+        String shardPart = inputFIle.getName().split("\\.")[0];
+        Log.i(TAG, "Shard PArt Name:" + shardPart);
+        String shardPrefix = "shard_"+shardPart+"_"+String.valueOf(shardNumbers) ;
         long fileSize = inputFIle.length();//453013
 
         int chunkNumbers = shardNumbers; // number of shards to create
@@ -138,7 +157,7 @@ public class MyFileManager {
                         }
                     }
                 }
-                Log.i(TAG,"ShardName: "+shardId+"bytesRead: "+bytesRead+" bytesWritten: "+bytesWritten);
+                Log.i(TAG,"ShardName: "+shardId+", bytesRead: "+bytesRead+", bytesWritten: "+bytesWritten);
             }
 
 
