@@ -23,14 +23,16 @@ public class MyFileManager {
     //all file parts will be stored in dir
     private static final String TAG = "PPFileManager";
 //    private static final String dirName = "/my_files/";
-    static public File directory;
+    static public File uploadDirectory;
+    static public File downloadDirectory;
 //    static String dirName = "C:\\Users\\saura\\Desktop\\TestFol\\";
 
-    public MyFileManager(File ppSysDir, String uploadDirectoryName){
-        directory = new File(ppSysDir, "/" + uploadDirectoryName + "/");
+    public MyFileManager(File ppSysDir, String uploadDirectoryName, String downloadDirectoryName){
+        uploadDirectory = new File(ppSysDir, "/" + uploadDirectoryName + "/");
+        downloadDirectory = new File(ppSysDir, "/" + downloadDirectoryName + "/");
     }
     public static void processFileDownload(String filename,OutputStream os){
-        checkDir();
+        checkDir(downloadDirectory);
         try {
 
         } catch (Exception e) {
@@ -65,9 +67,9 @@ public class MyFileManager {
 
 
     public static List<String> processFileUpload(String filename){
-        checkDir();
+        checkDir(uploadDirectory);
         try {
-            Log.i(TAG,"directory: "+directory.toString()+ ",  Exists: " + directory.exists());
+            Log.i(TAG,"directory: "+uploadDirectory.toString()+ ",  Exists: " + uploadDirectory.exists());
             return shardBlob(filename,2);
         }
         catch (Exception e) {
@@ -78,13 +80,13 @@ public class MyFileManager {
 
 
     public static String reconstructShards(List<String> shardBlobIdList,String newName) throws IOException {
-        checkDir();
+        checkDir(downloadDirectory);
         String reconsBlobID =  newName;
-        File file = new File(directory,reconsBlobID);
+        File file = new File(downloadDirectory, reconsBlobID);
 
         try(WritableByteChannel writer = Channels.newChannel(new FileOutputStream(file))){
             for (String blobId : shardBlobIdList) {
-                InputStream inputStream =new FileInputStream(new File(directory,blobId));
+                InputStream inputStream =new FileInputStream(new File(downloadDirectory,blobId));
                 try(ReadableByteChannel reader = Channels.newChannel(inputStream )){
                     ByteBuffer bytes = ByteBuffer.allocate(1024);
                     while(reader.read(bytes)>0) {
@@ -102,7 +104,7 @@ public class MyFileManager {
     }
 
     private static List<String> shardBlob(String inFileName,int shardNumbers) throws IOException {
-        checkDir();
+        checkDir(uploadDirectory);
         File inputFIle = new File(inFileName);
         FileInputStream inputStream = new FileInputStream(inputFIle);
 
@@ -137,7 +139,7 @@ public class MyFileManager {
                 long bytesWritten = 0;
 
 
-                OutputStream outS = new FileOutputStream(new File(directory,shardId));
+                OutputStream outS = new FileOutputStream(new File(uploadDirectory,shardId));
                 try(WritableByteChannel writer = Channels.newChannel(outS)){
                     ByteBuffer bytes = ByteBuffer.allocate(BUF_SIZE);
 
@@ -165,7 +167,7 @@ public class MyFileManager {
         return shardList;
 
     }
-    private static void checkDir(){
+    private static void checkDir(File directory){
 //        File SDCardRoot = Environment.getExternalStorageDirectory();
 
 //        directory = new File(SDCardRoot,"/pp_shard_files/");

@@ -186,7 +186,7 @@ public class HttpdActivity extends AppCompatActivity {
         Log.i(TAG, "Current Device IP: "+ selfIP);
         serviceName = serviceName + selfIP;
 
-        fileShardManager = new MyFileManager(ppSysDir, uploadDirectoryName);
+        fileShardManager = new MyFileManager(ppSysDir, uploadDirectoryName, downloadDirectoryName);
 
         server = new WebServer();
         try {
@@ -256,24 +256,44 @@ public class HttpdActivity extends AppCompatActivity {
                     Log.i(TAG, "nwDeviceDetails: " + nwDeviceDetails);
                     Log.i(TAG, "uploadDetails: " + uploadDetails);
 
-                    JSONArray downloadFileFrags = (JSONArray) uploadDetails.get(downloadFileName);
+                    JSONArray downloadFileFrags = (JSONArray) uploadDetails.get(downloadFileName); // get the fragment details of requested file
 
                     int fragCount = downloadFileFrags.length();
+                    List<String> fragNames= new ArrayList<String>();
 
                     for (int i=0; i<fragCount; i++){
                         JSONObject fragObj = downloadFileFrags.getJSONObject(i);
                         String fragName = (String) fragObj.get("fragName");
+                        fragNames.add(fragName);
                         String clientIP = (String) fragObj.get("ip");
                         String clientPort = (String) fragObj.get("port");
                         String downloadURL = "http//"+clientIP+":"+clientPort+"/download?filename="+fragName+"&ip="+selfIP+"&port="+selfPort;
 
                         Log.i(TAG, "Download URL:" + downloadURL);
                         // TODO: Hit the download url
+//                        downloadURLConnect(downloadURL);
 
                     }
+
+                    String reconstructShardResult = fileShardManager.reconstructShards(fragNames, downloadFileName);
+
+                    // delete the shards after reconstruction
+                    for (String fragName : fragNames){
+
+                        File fragmentFile = new File(ppSysDir, downloadDirectoryName + "/" + fragName);
+                        Boolean deleteSucces = fragmentFile.delete();
+                        if (!deleteSucces){
+                            Log.i(TAG, "Deleting downloaded Shard " + fragmentFile.getPath() + " post-upload Failed.");
+                        }
+                        else{
+                            Log.i(TAG, "Downloaded Shard " + fragmentFile.getName() + " Deleted successfully after reconstruction.");
+                        }
+
+                    }
+
                 }
             }
-            catch (JSONException e) {
+            catch (JSONException | IOException e) {
                 e.printStackTrace();
             }
 
@@ -291,6 +311,33 @@ public class HttpdActivity extends AppCompatActivity {
 //        byte[] decodedBytes = Base64.getDecoder().decode(encodedData.getBytes());
 //        return decodedBytes ;
 //    }
+
+    public void downloadURLConnect(String url){
+        // Used to hit the download url of servers
+        String TAG = "DownloadFile";
+//        String url = "http://" + client_ip + ":" + port + "/upload?filename=" + fragmentFile.getName();
+//        String charset = "UTF-8";
+////        File fragmentFile = new File(Environment.getExternalStorageDirectory()+"/" + uploadDirectoryName + "/"+fragmentName);
+//        String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
+//        String CRLF = "\r\n"; // Line separator required by multipart/form-data.
+
+        URLConnection connection;
+
+        try {
+            Log.i(TAG, "Requesting Download on: " + url);
+            connection = new URL(url).openConnection();
+            // Request is lazily fired whenever you need to obtain information about response.
+            int responseCode = ((HttpURLConnection) connection).getResponseCode();
+            System.out.println(responseCode); // Should be 200
+
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+            Log.d("Error", String.valueOf(e));
+        }
+
+
+    }
 
     public JSONObject manifestFileReader(){
         //TODO: Read from Manifest File
@@ -545,7 +592,7 @@ public class HttpdActivity extends AppCompatActivity {
 
                 File fragmentFile = new File(ppSysDir, downloadDirectoryName + "/"+fragmentName);
                 if (fragmentFile.exists()) {
-                    uploadFiles(fragmentFile, client_ip, port);
+                    uploadFiles(fragmentFile, client_ip, port); // Upload to the client that requested download
 
                     return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT,
                             "File Sent Successfully");
