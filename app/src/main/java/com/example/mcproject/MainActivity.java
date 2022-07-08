@@ -109,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
             uri->{
                 try {
 
-                    File downloadedFile = new File(MyFileManager.directory,saveFileName);
+                    File downloadedFile = new File(MyFileManager.downloadDirectory,saveFileName);
                     InputStream inputStream = new FileInputStream(downloadedFile);
 
                     OutputStream os = getContentResolver().openOutputStream(uri);
