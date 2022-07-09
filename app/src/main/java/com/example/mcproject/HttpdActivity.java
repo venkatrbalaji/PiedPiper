@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.format.Formatter;
@@ -126,7 +127,9 @@ public class HttpdActivity extends AppCompatActivity {
                                 //TODO: Uncomment below line when ready to deploy.
                                 // 1. Additional checks for successful upload and retry on Failure can be included
 
-                                // uploadFiles(fragmentFile, clientIP, clientPort);
+//                                 uploadFiles(fragmentFile, clientIP, clientPort);
+                                UploadFiles uploadTask = new UploadFiles(fragmentFile, clientIP, clientPort);
+                                uploadTask.execute();
 
                                 // TODO: Write the details to Manifest File
                                 // Add values to the read-in keys.
@@ -153,16 +156,6 @@ public class HttpdActivity extends AppCompatActivity {
                                 }
                                 catch (JSONException e){
                                     e.printStackTrace();
-                                }
-
-                                // TODO: Delete the shards after upload
-
-                                Boolean deleteSucces = fragmentFile.delete();
-                                if (!deleteSucces){
-                                    Log.i(TAG, "Deleting Shard " + fragmentFile.getPath() + " post-upload Failed.");
-                                }
-                                else{
-                                    Log.i(TAG, "Shard " + fragmentFile.getName() + " Deleted successfully post-upload.");
                                 }
 
                             }
@@ -267,33 +260,23 @@ public class HttpdActivity extends AppCompatActivity {
                         fragNames.add(fragName);
                         String clientIP = (String) fragObj.get("ip");
                         String clientPort = (String) fragObj.get("port");
-                        String downloadURL = "http//"+clientIP+":"+clientPort+"/download?filename="+fragName+"&ip="+selfIP+"&port="+selfPort;
+                        String downloadURL = "http://"+clientIP+":"+clientPort+"/download?filename="+fragName+"&ip="+selfIP+"&port="+selfPort;
 
                         Log.i(TAG, "Download URL:" + downloadURL);
                         // TODO: Hit the download url
 //                        downloadURLConnect(downloadURL);
+                        downloadFiles downloadTask = new downloadFiles(downloadURL);
+                        downloadTask.execute();
+
+                        reconstructFile reconstructFileTask = new reconstructFile(fragNames, downloadFileName);
+                        reconstructFileTask.execute();
 
                     }
 
-                    String reconstructShardResult = fileShardManager.reconstructShards(fragNames, downloadFileName);
-
-                    // delete the shards after reconstruction
-                    for (String fragName : fragNames){
-
-                        File fragmentFile = new File(ppSysDir, downloadDirectoryName + "/" + fragName);
-                        Boolean deleteSucces = fragmentFile.delete();
-                        if (!deleteSucces){
-                            Log.i(TAG, "Deleting downloaded Shard " + fragmentFile.getPath() + " post-upload Failed.");
-                        }
-                        else{
-                            Log.i(TAG, "Downloaded Shard " + fragmentFile.getName() + " Deleted successfully after reconstruction.");
-                        }
-
-                    }
 
                 }
             }
-            catch (JSONException | IOException e) {
+            catch (JSONException e) {
                 e.printStackTrace();
             }
 
@@ -312,6 +295,154 @@ public class HttpdActivity extends AppCompatActivity {
 //        return decodedBytes ;
 //    }
 
+
+
+    public JSONObject manifestFileReader(){
+        //TODO: Read from Manifest File
+//            JSONParser jsonParser = new JSONParser();
+
+        JSONObject manifestObject = null;
+        manifestFile = new File(ppSysDir, manifestFileName);
+        Log.i(TAG, "File " + manifestFile.getName() + " exists. Reading it.");
+        if (manifestFile.exists()) {
+
+            try (FileReader reader = new FileReader(manifestFile)) {
+                StringBuilder manifestContent = new StringBuilder("");
+
+                char[] buffer = new char[1024];
+                int charsRead = 0;
+                while ((charsRead = reader.read(buffer, 0, buffer.length)) >= 0) {
+                    manifestContent.append(buffer);
+                }
+
+                Log.i(TAG, "Read Content: " + String.valueOf(manifestContent));
+                manifestObject = new JSONObject(String.valueOf(manifestContent));
+
+            } catch (IOException | JSONException e) {
+                e.printStackTrace();
+            }
+        }
+        return manifestObject;
+    }
+
+
+    public void manifestWriter(JSONObject manifestObject){
+        //Write JSON file
+        (new Thread() {
+            public void run() {
+                Log.i(TAG, "Waiting to write Manifest File");
+                try (FileWriter file = new FileWriter(manifestFile)) {
+                    manifestWriteSemaphore.acquire();
+                    Log.i(TAG, "Writing to Manifest File");
+                    file.write(String.valueOf(manifestObject));
+                    file.write("\r\n");
+                    file.flush();
+
+                } catch (IOException | InterruptedException e) {
+                    e.printStackTrace();
+                }
+                manifestWriteSemaphore.release();
+            }}).start();
+    }
+
+
+    public class reconstructFile extends AsyncTask<String, String, String>{
+
+        List<String> fragNames;
+        String TAG = "recoonstructFile";
+        String downloadFileName;
+        public reconstructFile(List<String> fragNames, String downloadFileName){
+            this.fragNames = fragNames;
+            this.downloadFileName = downloadFileName;
+        }
+
+        @Override
+        protected String doInBackground(String... strings){
+
+            try {
+
+                List<File> fragFiles = new ArrayList<>();
+                File downloadDirec = new File(ppSysDir, downloadDirectoryName + "/");
+
+                for (String fragName : fragNames){
+                   fragFiles.add(new File(downloadDirec, fragName));
+                }
+                int availableFiles = 0;
+                for (File fragFile : fragFiles){
+                    Log.i(TAG, "Waiting for File "+ fragFile.getName() + " to be downloaded.");
+                    while(!fragFile.exists()) Thread.sleep(100);
+                    availableFiles += 1;
+                }
+
+                Log.i(TAG, "All Shards are downloaded");
+                Log.i(TAG, "Reconstructing original file");
+
+                String reconstructShardResult = fileShardManager.reconstructShards(fragNames, downloadFileName);
+
+                // delete the shards after reconstruction
+                for (String fragName : fragNames) {
+
+                    File fragmentFile = new File(ppSysDir, downloadDirectoryName + "/" + fragName);
+                    Boolean deleteSucces = fragmentFile.delete();
+                    if (!deleteSucces) {
+                        Log.i(TAG, "Deleting downloaded Shard " + fragmentFile.getPath() + " post-upload Failed.");
+                    } else {
+                        Log.i(TAG, "Downloaded Shard " + fragmentFile.getName() + " Deleted successfully after reconstruction.");
+                    }
+
+                }
+            }
+            catch (IOException | InterruptedException e){
+                Log.e(TAG, "Error Message:", e);
+            }
+            return null;
+        }
+
+    }
+
+
+    public class downloadFiles extends AsyncTask<String, String, String>{
+        String url;
+
+        public downloadFiles(String url) {
+            super();
+            this.url = url;
+        }
+
+        @Override
+        protected String doInBackground(String... strings){
+            // Used to hit the download url of servers
+            String TAG = "DownloadFile";
+//        String url = "http://" + client_ip + ":" + port + "/upload?filename=" + fragmentFile.getName();
+//        String charset = "UTF-8";
+////        File fragmentFile = new File(Environment.getExternalStorageDirectory()+"/" + uploadDirectoryName + "/"+fragmentName);
+//        String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
+//        String CRLF = "\r\n"; // Line separator required by multipart/form-data.
+
+            URLConnection connection;
+
+            try {
+                Log.i(TAG, "Requesting Download on: " + url);
+                connection = new URL(url).openConnection();
+                // Request is lazily fired whenever you need to obtain information about response.
+                int responseCode = ((HttpURLConnection) connection).getResponseCode();
+                System.out.println(responseCode); // Should be 200
+
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+                Log.d("Error", String.valueOf(e));
+            }
+            return null;
+        }
+
+        @Override
+        protected void onProgressUpdate(String... text) {
+            Toast.makeText(getApplicationContext(), "In Background Download Task " + text[0], Toast.LENGTH_LONG).show();
+        }
+
+
+    }
     public void downloadURLConnect(String url){
         // Used to hit the download url of servers
         String TAG = "DownloadFile";
@@ -339,51 +470,97 @@ public class HttpdActivity extends AppCompatActivity {
 
     }
 
-    public JSONObject manifestFileReader(){
-        //TODO: Read from Manifest File
-//            JSONParser jsonParser = new JSONParser();
+    public class UploadFiles extends AsyncTask<String, String, String>{
 
-        JSONObject manifestObject = null;
-        manifestFile = new File(ppSysDir, manifestFileName);
-        Log.i(TAG, "File " + manifestFile.getName() + " exists. Reading it.");
+        File fragmentFile;
+        String client_ip, port;
 
-        try (FileReader reader = new FileReader(manifestFile))
-        {
-            StringBuilder manifestContent = new StringBuilder("");
+        public UploadFiles(File fragmentFile, String client_ip, String port){
+            super();
+            this.fragmentFile = fragmentFile;
+            this.client_ip = client_ip;
+            this.port = port;
+        }
 
-            char[] buffer = new char[1024];
-            int charsRead = 0;
-            while ((charsRead = reader.read(buffer, 0, buffer.length)) >= 0) {
-                manifestContent.append(buffer);
+        @Override
+        protected String doInBackground(String... strings){
+
+            String TAG = "uploadFile";
+            String url = "http://" + client_ip + ":" + port + "/upload?filename=" + fragmentFile.getName();
+            String charset = "UTF-8";
+//        File fragmentFile = new File(Environment.getExternalStorageDirectory()+"/" + uploadDirectoryName + "/"+fragmentName);
+            String boundary = Long.toHexString(System.currentTimeMillis()); // Just generate some unique random value.
+            String CRLF = "\r\n"; // Line separator required by multipart/form-data.
+
+            URLConnection connection;
+
+            try {
+                Log.i(TAG, "Opening URL connection on: " + url);
+                connection = new URL(url).openConnection();
+                connection.setDoOutput(true);
+//                    connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+                try (
+                        OutputStream output = connection.getOutputStream();
+                        PrintWriter writer = new PrintWriter(new OutputStreamWriter(output, charset), true);
+                ) {
+                    FileInputStream vf = new FileInputStream(fragmentFile);
+                    try {
+                        byte[] buffer = new byte[1024];
+                        int bytesRead = 0;
+                        Log.i(TAG, "Writing to OutputStream");
+                        while ((bytesRead = vf.read(buffer, 0, buffer.length)) >= 0) {
+                            output.write(buffer, 0, bytesRead);
+                            Log.i(TAG, "Bytes Read: " + bytesRead);
+
+                        }
+                        //   output.close();
+                        //Toast.makeText(getApplicationContext(),"Read Done", Toast.LENGTH_LONG).show();
+                    } catch (Exception exception) {
+
+
+                        //Toast.makeText(getApplicationContext(),"output exception in catch....."+ exception + "", Toast.LENGTH_LONG).show();
+                        Log.d("Error", String.valueOf(exception));
+                        // output.close();
+
+                    }
+
+                    output.flush(); // Important before continuing with writer!
+                    writer.append(CRLF).flush(); // CRLF is important! It indicates end of boundary.
+
+
+                    // End of multipart/form-data.
+//                        writer.append("--" + boundary + "--").append(CRLF).flush();
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                    Log.d("Error", String.valueOf(e));
+                }
+                // Request is lazily fired whenever you need to obtain information about response.
+                int responseCode = ((HttpURLConnection) connection).getResponseCode();
+                System.out.println(responseCode); // Should be 200
+
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+                Log.d("Error", String.valueOf(e));
             }
 
-            Log.i(TAG, "Read Content: " + String.valueOf(manifestContent));
-            manifestObject = new JSONObject(String.valueOf(manifestContent));
+            // TODO: Delete the shards after upload
 
-        } catch (IOException | JSONException e) {
-            e.printStackTrace();
+            Boolean deleteSucces = fragmentFile.delete();
+            if (!deleteSucces){
+                Log.i(TAG, "Deleting Shard " + fragmentFile.getPath() + " post-upload Failed.");
+            }
+            else{
+                Log.i(TAG, "Shard " + fragmentFile.getName() + " Deleted successfully post-upload.");
+            }
+            return null;
         }
-        return manifestObject;
-    }
 
-
-    public void manifestWriter(JSONObject manifestObject){
-        //Write JSON file
-        (new Thread() {
-            public void run() {
-                Log.i(TAG, "Waiting to write Manifest File");
-                try (FileWriter file = new FileWriter(manifestFile)) {
-                    manifestWriteSemaphore.acquire();
-                    Log.i(TAG, "Writing to Manifest File");
-                    file.write(String.valueOf(manifestObject));
-                    file.write("\r\n");
-                    file.flush();
-
-                } catch (IOException | InterruptedException e) {
-                    e.printStackTrace();
-                }
-                manifestWriteSemaphore.release();
-            }}).start();
+        @Override
+        protected void onProgressUpdate(String... text) {
+            Toast.makeText(getApplicationContext(), "In Background Upload Task " + text[0], Toast.LENGTH_LONG).show();
+        }
     }
 
 
@@ -542,7 +719,7 @@ public class HttpdActivity extends AppCompatActivity {
                 String fragmentName = urlParameters.get("filename");
                 Log.i(TAG, "Downloading File: " + fragmentName);
                 File SDCardRoot = Environment.getExternalStorageDirectory(); // location where you want to store
-                File directory = new File(ppSysDir + downloadDirectoryName + "/"); //create directory to keep your downloaded file
+                File directory = new File(ppSysDir, downloadDirectoryName + "/"); //create directory to keep your downloaded file
                 if (!directory.exists()) {
                     directory.mkdir();
                 }
@@ -551,7 +728,8 @@ public class HttpdActivity extends AppCompatActivity {
                 try {
                     output = new FileOutputStream(new File(directory, fragmentName));
                 } catch (FileNotFoundException e) {
-                    e.printStackTrace();
+//                    e.printStackTrace();
+                    Log.e(TAG, "Error message:", e);
                 }
 
                 try {
@@ -567,12 +745,12 @@ public class HttpdActivity extends AppCompatActivity {
 
 
                     //Toast.makeText(getApplicationContext(),"output exception in catch....."+ exception + "", Toast.LENGTH_LONG).show();
-                    Log.d("Error", String.valueOf(exception));
+                    Log.e(TAG, "Error", exception);
 //                publishProgress(String.valueOf(exception));
                     try {
                         output.close();
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        Log.e(TAG, "Error", e);
                     }
 
                 }
@@ -592,7 +770,10 @@ public class HttpdActivity extends AppCompatActivity {
 
                 File fragmentFile = new File(ppSysDir, downloadDirectoryName + "/"+fragmentName);
                 if (fragmentFile.exists()) {
-                    uploadFiles(fragmentFile, client_ip, port); // Upload to the client that requested download
+//                    uploadFiles(fragmentFile, client_ip, port); // Upload to the client that requested download
+
+                    UploadFiles uploaTask = new UploadFiles(fragmentFile, client_ip, port);
+                    uploaTask.execute();
 
                     return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT,
                             "File Sent Successfully");

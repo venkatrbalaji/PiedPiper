@@ -115,6 +115,8 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
                 NsdServiceInfo mService = serviceInfo;
                 int port = mService.getPort();
                 String host = String.valueOf(mService.getHost());
+                host = host.replaceAll("/", "");
+//                host = host.substring(0, host.length() - 1);
 //                ClientThread.start(host,port);
                 Log.i(TAG, "Resolved Service details are: host: " + host+" port: "+port);
 
@@ -137,6 +139,7 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
 
                 // Create Manifest File
                 manifestFile = new File(ppSysDir, manifestFileName);
+//                Boolean createFile = false;
                 JSONObject manifestObject = null;
                 JSONArray nwDeviceDetails = null;
                 JSONObject uploadDetails = null;
@@ -146,6 +149,10 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
                     try {
                         nwDeviceDetails = new JSONArray(); // Value for key "nwDeviceDetails"
                         uploadDetails = new JSONObject(); // Value for key "uploadDetails"
+//                        createFile = true;
+                        manifestObject.put("nwDeviceDetails", nwDeviceDetails);
+                        manifestObject.put("uploadDetails", uploadDetails);
+                        manifestWriter(manifestObject);
 
                     }
                     catch (Exception e) {
@@ -172,7 +179,7 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
                 //TODO: Check if the IP is already present or current Device IP
                 try {
                     Boolean skipWrite = false;
-                    if (host == selfIp) {
+                    if (host.equals(selfIp)) {
                         skipWrite = true;
                     }
                     if (nwDeviceDetails != null) {
@@ -180,7 +187,7 @@ public class MyDiscoveryListener implements  NsdManager.DiscoveryListener{
                         for (int i = 0; i < deviceCount; i++) {
                             JSONObject currObj = (JSONObject) nwDeviceDetails.get(i);
                             String currIp = (String) currObj.get("ip");
-                            Log.i(TAG, "Existing IP: "+ currIp + ", New IP: " + host +".");
+                            Log.i(TAG, "Existing IP: "+ currIp + ", New IP: " + host +"");
                             if (currIp.equals(host)) {
                                 skipWrite = true;
                             }
