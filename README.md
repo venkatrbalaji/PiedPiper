@@ -5,3 +5,5 @@ Decentralized, peer-to-peer, shared and secure Android cloud storage application
 - Developed the application using Java in Android Studio. 
 - Implemented peer-to-peer device discovery using Android Network Service Discovery.
 - Implemented peer-to-peer connection and data/file transfer using Multi Threading and Socket programming.
+
+## Inspiration: "Silicon Valley (TV Series)"
